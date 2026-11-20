@@ -14,7 +14,6 @@ class ResourceUpdate(BaseModel):
 class ResourceResponse(BaseModel):
     id: int
     name: str
-    description: str
     resource_type: str
     availability: bool
 
