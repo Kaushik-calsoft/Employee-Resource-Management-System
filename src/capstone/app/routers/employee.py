@@ -11,6 +11,13 @@ next_id = 101
 async def create_employee(employee: EmployeeCreate):
     global next_id
     user_id = next_id
+
+    for existing_user in users.values():
+        if existing_user["email"] == employee.email:
+            raise HTTPException(
+                status_code=409,
+                detail="Email already exists",
+            )
     users[user_id] = {
         "id": user_id,
         "name": employee.name,
@@ -19,7 +26,7 @@ async def create_employee(employee: EmployeeCreate):
         "department": employee.department
     }
     next_id += 1
-    return {"id": user_id, **users[user_id]}
+    return users[user_id]
 
 @router.get("/employees/", response_model=list[EmployeeResponse])
 async def get_all_employees():
