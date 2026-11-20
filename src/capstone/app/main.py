@@ -30,6 +30,3 @@ app.include_router(project_router)
 app.include_router(resource_router)
 
 app.include_router(assignment_router)
-
-
-
