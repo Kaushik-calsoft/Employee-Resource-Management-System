@@ -1,6 +1,7 @@
+
 import asyncio
 from sqlalchemy import text
-from database import engine
+from capstone.app.database import engine
 
 async def test_connection():
     try:
