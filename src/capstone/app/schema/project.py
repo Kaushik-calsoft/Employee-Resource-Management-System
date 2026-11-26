@@ -12,7 +12,7 @@ class ProjectCreate(BaseModel):
     def validate_dates(cls, self):
         if self.start_date and self.end_date < self.start_date:
             raise ValueError("End date cannot be earlier than start date")
-        return self.end_date
+        return self
 
 class ProjectUpdate(BaseModel):
     name : str | None = Field(default=None, min_length=1, max_length=100)
@@ -25,7 +25,7 @@ class ProjectUpdate(BaseModel):
     def validate_dates(cls, self):
             if self.start_date and self.end_date < self.start_date:
                 raise ValueError("End date cannot be earlier than start date")
-            return self.end_date
+            return self
     
 
 class ProjectResponse(BaseModel):
