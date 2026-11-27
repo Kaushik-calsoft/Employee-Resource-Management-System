@@ -20,12 +20,7 @@ class ProjectUpdate(BaseModel):
     start_date: date | None = None
     end_date: date | None = None
     status: str | None = None
-    @model_validator(mode='after')
-    @classmethod
-    def validate_dates(cls, self):
-            if self.start_date and self.end_date < self.start_date:
-                raise ValueError("End date cannot be earlier than start date")
-            return self
+
     
 
 class ProjectResponse(BaseModel):

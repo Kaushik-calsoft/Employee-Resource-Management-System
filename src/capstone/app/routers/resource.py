@@ -1,82 +1,63 @@
-from sqlalchemy import select
-from ..database import SessionLocal
-from ..models.resource import Resource
-from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+from ..services.resource_service import ResourceService
+from ..database import get_db
+from fastapi import APIRouter, Depends, HTTPException, status
 from ..schema.resource import ResourceCreate, ResourceUpdate, ResourceResponse
 
 
 router = APIRouter()
 
 @router.post("/resources", response_model=ResourceResponse, status_code=201)
-async def create_resource(resource: ResourceCreate):
-    async with SessionLocal() as session:
-        new_resource = Resource(
-            name = resource.name,
-            resource_type = resource.resource_type,
-            availability = resource.availability
-        )
-
-        session.add(new_resource)
-        await session.commit()
-        await session.refresh(new_resource)
-
-        return new_resource
+async def create_resource(resource: ResourceCreate, session:AsyncSession = Depends(get_db)):
+    service = ResourceService(session)
+    new_resource = await  service.create_resource(resource)
+    
+    return new_resource
    
 @router.get("/resources", response_model=list[ResourceResponse])
-async def get_resources():
-    async with SessionLocal() as session:
-        result = await session.execute(select(Resource))
-        resource = result.scalars().all()
-    return resource
+async def get_resources(session:AsyncSession = Depends(get_db)):
+    service = ResourceService(session)
+    return await service.get_all_resource()
 
 @router.get("/resources/{resource_id}", response_model=ResourceResponse)
-async def get_resource(resource_id: int):
-    async with SessionLocal() as session:
-        resource = await session.get(Resource, resource_id)
-        if resource is None:
-            raise HTTPException(status_code=404, detail="Resource not found")
+async def get_resource(resource_id: int, session:AsyncSession = Depends(get_db)):
+    service = ResourceService(session)
+    existing = await service.get_by_id(resource_id)
 
-        return resource
+    if existing is None:
+        raise HTTPException(status_code=404, detail="resource not found")
+
+    return existing
 
 @router.put("/resources/{resource_id}", response_model=ResourceResponse)
-async def update_resource(resource_id: int, resource_update: ResourceUpdate):
-    async with SessionLocal() as session:
-        resource = await session.get(Resource, resource_id)
-        if resource is None:
-            raise HTTPException(status_code=404, detail="Resource not found")
-        resource.name = resource_update.name
-        resource.resource_type = resource_update.resource_type
-        resource.availability = resource_update.availability
+async def update_resource(resource_id: int, resource_update: ResourceUpdate, session:AsyncSession = Depends(get_db)):
+    service = ResourceService(session)
 
-        await session.commit()
-        await session.refresh(resource)
-
-        return resource
-
+    try : 
+        updated_resource = await service.update_resource(resource_id,resource_update)
+        return updated_resource
+    except ValueError:
+        raise HTTPException (status_code=404, detail="Resource not found")
+        
 @router.patch("/resources/{resource_id}", response_model=ResourceResponse)
-async def partial_update_resource(resource_id: int, resource_update: ResourceUpdate):
-    async with SessionLocal() as session:
-        resource = await session.get(Resource, resource_id)
-        if resource is None:
-            raise HTTPException( status_code=404, detail="Resource not found")
+async def partial_update_resource(resource_id: int, resource_update: ResourceUpdate, session:AsyncSession = Depends(get_db)):
+    
+    service = ResourceService(session)
 
-        update = resource_update.model_dump(exclude_unset=True)
+    try:
+        updated_resource = await service.update_resource(resource_id, resource_update)
+        return updated_resource
+    except ValueError:
+        raise HTTPException (status_code=404, detail="Resource not found")
+    
 
-        for field,value in update.items():
-            setattr(resource,field,value)
+@router.delete("/resources/{resource_id}")
+async def delete_resource(resource_id: int, session:AsyncSession = Depends(get_db)):
+    service = ResourceService(session)
 
-        await session.commit()
-        await session.refresh(resource)
+    try:
+        await service.delete_resource(resource_id)
+        return {"detail" : "Deleted resource sucessfully"}
 
-        return resource
-@router.delete("/resources/{resource_id}", response_model=ResourceResponse)
-async def delete_resource(resource_id: int):
-    async with SessionLocal() as session:
-        res_id = await session.get(Resource, resource_id)
-        if res_id is None:
-            raise HTTPException( status_code=404, detail="Resource not found")
-
-        await session.delete(res_id)
-        await session.commit()
-
-        return res_id
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Resource not found")

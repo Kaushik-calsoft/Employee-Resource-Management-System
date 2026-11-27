@@ -1,96 +1,66 @@
-from sqlalchemy import select
-from ..database import SessionLocal
-from ..models.employee import Employee
-from fastapi import APIRouter, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+from ..database import get_db
+from ..services.employee_service import EmployeeService
+from fastapi import APIRouter, HTTPException, status, Depends
 from ..schema.employee import EmployeeCreate, EmployeeUpdate, EmployeeResponse
 router = APIRouter()
 
 
 @router.post("/employees", response_model=EmployeeResponse, status_code=201)
-async def create_employee(employee: EmployeeCreate):
-    async with SessionLocal() as session:
-        result = await session.execute(select(Employee).where(Employee.email == employee.email))
-        existing_employee = result.scalars().first()
-        if existing_employee:
-            raise HTTPException(
-                status_code = 409,
-                detail="Email already exists"
-            )
-        
-        new_employee = Employee(
-            name=employee.name,
-            email=employee.email,
-            designation=employee.designation,
-            department=employee.department,
-        )
+async def create_employee(employee: EmployeeCreate, session:AsyncSession = Depends(get_db)):
+        service = EmployeeService(session)
 
-        session.add(new_employee)
-        await session.commit()
-        await session.refresh(new_employee)
+        try:
+             new_employee = await service.create_employee(employee)
+        except ValueError:
+             raise HTTPException (status_code=409, detail="Email already exists")
+
         return new_employee
 
 @router.get("/employees/", response_model=list[EmployeeResponse])
-async def get_all_employees():
-    async with SessionLocal() as session:
-        result = await session.execute(select(Employee))
-        employees = result.scalars().all()
-        return employees
+async def get_all_employees(session : AsyncSession = Depends(get_db)):
+    service = EmployeeService(session)
+    return await service.get_all_employees()
 
+    
+            
 @router.get("/employees/{employee_id}", response_model=EmployeeResponse)
-async def get_employee(employee_id: int):
-    async with SessionLocal() as session:
-        employee = await session.get(Employee,employee_id)
-    if employee is None:
-        raise HTTPException(status_code=404, detail="Employee not found")
+async def get_employee(employee_id: int, session:AsyncSession = Depends(get_db)):
+        service = EmployeeService(session)
+        employee = await service.get_employee(employee_id)
+        if employee is None:
+            raise HTTPException(status_code=404, detail="Employee not found")
         
-    return employee
+        return employee
 
 @router.put("/employees/{employee_id}", response_model=EmployeeResponse)
-async def update_employee(employee_id: int, employee: EmployeeUpdate):
-    async with SessionLocal() as session:
-        existing_employee = await session.get(Employee,employee_id)
-        if existing_employee is None:
-            raise HTTPException(
-                status_code = 404,
-                detail = "Employee not found"
-            )
+async def update_employee(employee_id: int, employee: EmployeeUpdate, session:AsyncSession = Depends(get_db)):
+        service = EmployeeService(session)
 
-        existing_employee.name = employee.name
-        existing_employee.email = employee.email
-        existing_employee.designation = employee.designation
-        existing_employee.department = employee.department
-
-        await session.commit()
-        await session.refresh(existing_employee)
-
-        return existing_employee
+        try:
+            updated_employee = await service.update_employee(employee_id,employee)
+            return updated_employee
+        except ValueError:
+             raise HTTPException (status_code= 404, detail="Employee not found")
         
-@router.patch("/employees/{employee_id}", response_model=EmployeeResponse)
-async def partial_update_employee(employee_id: int, employee: EmployeeUpdate):
-    async with SessionLocal() as session:
-        existing_employee = await session.get(Employee, employee_id)
-        if existing_employee is None:
-            raise HTTPException(status_code=404, detail="Employee not found")
+@router.patch("/employees/{employee_id}", response_model=EmployeeResponse,)
+async def partial_update_employee(employee_id: int, employee: EmployeeUpdate, session: AsyncSession = Depends(get_db)):
+    service = EmployeeService(session)
 
-        update_data = employee.model_dump(exclude_unset=True)
+    try:
+         update_employee = await service.update_employee(employee_id,employee)
+         return update_employee
+    except ValueError:
+         raise HTTPException (status_code= 404 , detail= "Employee not found")
 
-        for field,values in update_data.items():
-            setattr(existing_employee,field,values)
+@router.delete("/employees/{employee_id}", status_code=204)
+async def delete_employee(employee_id: int, session: AsyncSession = Depends(get_db)):
+    service = EmployeeService(session)
 
-        await session.commit()
-        await session.refresh(existing_employee)
+    try:
+         await service.delete_employee(employee_id)
 
-        return existing_employee
-        
-@router.delete("/employees/{employee_id}", response_model=EmployeeResponse)
-async def delete_employee(employee_id: int):
-    async with SessionLocal() as session:
-        existing_employee = await session.get(Employee,employee_id)
+         return {"detail" : "Employee deleted sucessfully"}
+    except ValueError:
+         raise HTTPException(status_code=404, detail="Employee not found")
 
-        if existing_employee is None:
-            raise HTTPException(status_code=404, detail="Employee not found")
-
-        await session.delete(existing_employee)
-        await session.commit()
-
-        return existing_employee
